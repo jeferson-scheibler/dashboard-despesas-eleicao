@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard de Despesas Eleitorais</title>
+    <style>
+        /* CSS simples para organizar */
+        body { font-family: sans-serif; padding: 2em; background-color: #f4f4f9; }
+        h1 { text-align: center; color: #333; }
+        .chart-container { width: 80%; max-width: 800px; margin: 50px auto; padding: 20px; background-color: #fff; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+    </style>
+</head>
+<body>
+    <h1>Dashboard de Despesas de Campanha (Vereadores - SP 2020)</h1>
+    
+    <div class="chart-container">
+        <h2>Top 10 Tipos de Despesas</h2>
+        <canvas id="topDespesasChart"></canvas>
+    </div>
+
+    <div class="chart-container">
+        <h2>Top 10 Cidades por Despesa Média de Campanha</h2>
+        <canvas id="despesaMunicipioChart"></canvas>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="/static/script.js"></script>
+</body>
+</html>
