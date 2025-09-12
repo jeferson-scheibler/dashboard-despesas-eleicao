@@ -32,7 +32,7 @@ def carregar_dados_rs():
             sigla_partido,
             valor_despesa
         FROM `basedosdados.br_tse_eleicoes.despesas_candidato` 
-        WHERE ano = 2024 AND cargo = 'Vereador' AND sigla_uf = 'RS'
+        WHERE ano = 2024 AND cargo = 'vereador' AND sigla_uf = 'RS'
     )
     SELECT 
         d.id_municipio,
