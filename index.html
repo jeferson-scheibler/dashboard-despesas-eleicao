@@ -3,25 +3,40 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard de Despesas Eleitorais</title>
+    <title>Dashboard Eleições RS 2024</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
     <style>
-        /* CSS simples para organizar */
-        body { font-family: sans-serif; padding: 2em; background-color: #f4f4f9; }
-        h1 { text-align: center; color: #333; }
-        .chart-container { width: 80%; max-width: 800px; margin: 50px auto; padding: 20px; background-color: #fff; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; margin: 0; background-color: #f0f2f5; }
+        .header { background-color: #fff; padding: 20px; text-align: center; border-bottom: 1px solid #ddd; }
+        .container { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px; padding: 20px; }
+        .chart-box { background-color: #fff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); padding: 20px; }
+        #map { height: 500px; width: 100%; grid-column: 1 / -1; } /* O mapa ocupa a largura toda */
+        .loading { text-align: center; padding: 50px; font-size: 1.2em; color: #555; }
     </style>
 </head>
 <body>
-    <h1>Dashboard de Despesas de Campanha (Vereadores - SP 2020)</h1>
-    
-    <div class="chart-container">
-        <h2>Top 10 Tipos de Despesas</h2>
-        <canvas id="topDespesasChart"></canvas>
+    <div class="header">
+        <h1>Dashboard de Despesas de Campanha</h1>
+        <p>Análise das eleições para Vereador no Rio Grande do Sul - 2024</p>
     </div>
 
-    <div class="chart-container">
-        <h2>Top 10 Cidades por Despesa Média de Campanha</h2>
-        <canvas id="despesaMunicipioChart"></canvas>
+    <div id="loading-message" class="loading">
+        <p>Carregando dados, por favor aguarde...</p>
+    </div>
+
+    <div id="dashboard-content" class="container" style="display: none;">
+        <div id="map" class="chart-box"></div>
+        <div class="chart-box">
+            <h2>Top 15 Cidades com Maiores Gastos</h2>
+            <canvas id="cidadesChart"></canvas>
+        </div>
+        <div class="chart-box">
+            <h2>Top 10 Partidos com Maiores Gastos</h2>
+            <canvas id="partidosChart"></canvas>
+        </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>

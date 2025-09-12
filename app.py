@@ -1,70 +1,96 @@
 # app.py
 import pandas as pd
 import basedosdados as bd
-from flask import Flask, jsonify
+from flask import Flask, jsonify, send_from_directory
 
-# Inicializa o servidor Flask
+# --- CONFIGURAÇÃO ---
+# COLOQUE O ID DO SEU PROJETO DO GOOGLE CLOUD AQUI
+BILLING_PROJECT_ID = "analise-dados-tse" 
+# --------------------
+
 app = Flask(__name__, static_folder='static')
 
-# Função para carregar e processar os dados
-def get_processed_data():
-    print("Buscando dados na Base dos Dados... Isso pode levar um momento.")
+# Variável global para armazenar os dados em cache e não baixar toda hora
+dados_rs = None
+
+def carregar_dados_rs():
+    """
+    Busca e processa os dados de despesas para vereadores no RS em 2024.
+    Isso executa apenas uma vez quando o servidor inicia.
+    """
+    global dados_rs
+    if dados_rs is not None:
+        return dados_rs
+
+    print("Iniciando carga de dados do TSE para o RS em 2024...")
     
-    # Monta a query SQL para buscar os dados de vereadores em 2024
-    # ATENÇÃO: Os dados de 2024 ainda são preliminares.
-    # Para garantir que o código funcione, usaremos 2020 como exemplo.
-    # Quando os dados de 2024 estiverem consolidados, basta trocar o ano.
+    # Query para pegar despesas e juntar com a tabela de municípios para obter os nomes
     query = """
-    SELECT tipo_despesa, valor_despesa, id_municipio_tse
-    FROM `basedosdados.br_tse_eleicoes.despesas_candidato`
-    WHERE ano = 2020 AND cargo = 'Vereador' AND sigla_uf = 'SP'
-    """ 
-    # Filtrei por 'SP' para a query ser mais rápida. Remova se quiser dados do Brasil todo.
-
-    # Baixa os dados usando a biblioteca da Base dos Dados
-    # Você precisará configurar um projeto no Google Cloud. 
-    # Siga: https://basedosdados.github.io/mais/access_data_local/#primeiros-passos
-    df = bd.read_sql(query, billing_project_id="basedosdados.br_tse_eleicoes.despesas_candidato")
+    WITH despesas AS (
+        SELECT 
+            id_municipio,
+            sigla_partido,
+            valor_despesa
+        FROM `basedosdados.br_tse_eleicoes.despesas_candidato` 
+        WHERE ano = 2024 AND cargo = 'Vereador' AND sigla_uf = 'RS'
+    )
+    SELECT 
+        d.id_municipio,
+        m.nome AS nome_municipio,
+        d.sigla_partido,
+        d.valor_despesa
+    FROM despesas d
+    JOIN `basedosdados.br_bd_diretorios_brasil.municipio` m ON d.id_municipio = m.id_municipio
+    """
     
-    print("Dados baixados! Processando...")
+    try:
+        df = bd.read_sql(query, billing_project_id=BILLING_PROJECT_ID)
+        print("Dados carregados com sucesso!")
+        dados_rs = df
+        return df
+    except Exception as e:
+        print(f"ERRO AO CARREGAR DADOS: {e}")
+        return None
 
-    # --- Análise 1: Top 10 Tipos de Despesa ---
-    top_10_despesas = df.groupby('tipo_despesa')['valor_despesa'].sum().nlargest(10)
+# Carrega os dados na inicialização do servidor
+df = carregar_dados_rs()
+
+# --- ENDPOINTS DA API ---
+
+@app.route('/api/ranking-cidades')
+def ranking_cidades():
+    if df is None:
+        return jsonify({"error": "Dados não disponíveis"}), 500
     
-    # --- Análise 2: Despesa Média por Município (Top 10 Cidades) ---
-    despesa_media_municipio = df.groupby('id_municipio_tse')['valor_despesa'].mean().nlargest(10)
+    ranking = df.groupby('nome_municipio')['valor_despesa'].sum().nlargest(15).reset_index()
+    return jsonify(ranking.to_dict(orient='records'))
 
-    # Formata os dados para o formato JSON que o Chart.js entende
-    processed_data = {
-        "top_despesas": {
-            "labels": top_10_despesas.index.tolist(),
-            "values": top_10_despesas.values.tolist()
-        },
-        "despesa_municipio": {
-            "labels": [str(x) for x in despesa_media_municipio.index.tolist()], # Converte ID do município para string
-            "values": despesa_media_municipio.values.tolist()
-        }
-    }
+@app.route('/api/ranking-partidos')
+def ranking_partidos():
+    if df is None:
+        return jsonify({"error": "Dados não disponíveis"}), 500
     
-    return processed_data
+    ranking = df.groupby('sigla_partido')['valor_despesa'].sum().nlargest(10).reset_index()
+    return jsonify(ranking.to_dict(orient='records'))
 
-# Cria um "endpoint" da API. O frontend vai chamar essa URL.
-@app.route('/api/dados')
-def dados_endpoint():
-    data = get_processed_data()
-    return jsonify(data)
+@app.route('/api/mapa-calor')
+def mapa_calor():
+    if df is None:
+        return jsonify({"error": "Dados não disponíveis"}), 500
+    
+    # Usamos id_municipio aqui, que é o código IBGE de 7 dígitos
+    map_data = df.groupby('id_municipio')['valor_despesa'].sum().reset_index()
+    return jsonify(map_data.to_dict(orient='records'))
 
-# Rota para servir a página HTML principal
-from flask import send_from_directory
-
-@app.route('/static/<path:path>')
-def send_static(path):
-    return send_from_directory('static', path)
+# --- ROTAS PARA SERVIR O FRONTEND ---
 
 @app.route('/')
 def index():
     return send_from_directory('.', 'index.html')
 
-# Permite rodar o servidor localmente para testes
+@app.route('/static/<path:path>')
+def send_static(path):
+    return send_from_directory('static', path)
+
 if __name__ == '__main__':
     app.run(debug=True)
