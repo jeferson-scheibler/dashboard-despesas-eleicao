@@ -1,19 +1,15 @@
 // static/script.js
 
-// IIFE (Immediately Invoked Function Expression) para encapsular nosso código
 (async function() {
     // --- ELEMENTOS DO DOM ---
     const loader = document.getElementById('loader-overlay');
-    const dashboard = document.getElementById('dashboard-content');
 
     // --- FUNÇÕES UTILITÁRIAS ---
     const formatCurrency = (value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
-    const showLoader = () => loader.style.display = 'flex';
+    const formatPercent = (value) => `${value.toFixed(2)}%`;
     const hideLoader = () => {
         loader.style.opacity = '0';
-        setTimeout(() => {
-            loader.style.display = 'none';
-        }, 300); 
+        setTimeout(() => { loader.style.display = 'none'; }, 300);
     };
 
     async function fetchData(endpoint) {
@@ -24,10 +20,10 @@
     
     // --- FUNÇÕES DE RENDERIZAÇÃO ---
     
-    function renderKPIs(cidadesData, partidosData) {
-        const totalGasto = cidadesData.reduce((sum, cidade) => sum + cidade.valor_despesa, 0);
+    function renderKPIs(todasCidadesData, partidosData) {
+        const totalGasto = todasCidadesData.reduce((sum, cidade) => sum + cidade.valor_despesa, 0);
         document.getElementById('kpi-gasto-total').textContent = formatCurrency(totalGasto);
-        document.getElementById('kpi-total-cidades').textContent = cidadesData.length;
+        document.getElementById('kpi-total-cidades').textContent = todasCidadesData.length;
         document.getElementById('kpi-partido-campeao').textContent = partidosData[0]?.sigla_partido || 'N/A';
     }
 
@@ -36,39 +32,50 @@
             type: 'bar',
             data: {
                 labels: cidadesData.map(c => c.nome_municipio),
-                datasets: [{
-                    label: 'Gasto Total',
-                    data: cidadesData.map(c => c.valor_despesa),
-                    backgroundColor: '#36A2EB',
-                    borderRadius: 4
-                }]
+                datasets: [{ label: 'Gasto Total', data: cidadesData.map(c => c.valor_despesa), backgroundColor: '#36A2EB', borderRadius: 4 }]
             },
-            options: { 
-                indexAxis: 'y', 
-                responsive: true,
-                plugins: { 
-                    legend: { display: false },
-                    tooltip: { callbacks: { label: (ctx) => formatCurrency(ctx.raw) } } 
-                } 
-            }
+            options: { indexAxis: 'y', responsive: true, plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx) => formatCurrency(ctx.raw) } } } }
         });
     }
 
-    function renderPartidosChart(partidosData) {
-        new Chart(document.getElementById('partidosChart'), {
-            type: 'doughnut',
+    function renderCorrelacaoChart(correlacaoData) {
+        new Chart(document.getElementById('correlacaoChart'), {
+            type: 'scatter',
             data: {
-                labels: partidosData.map(p => p.sigla_partido),
                 datasets: [{
-                    data: partidosData.map(p => p.valor_despesa),
-                    backgroundColor: ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40', '#C9CBCF', '#E7E9ED', '#8D5B4C', '#58508d']
+                    label: 'Município',
+                    data: correlacaoData.map(d => ({
+                        x: d.gasto_total,
+                        y: d.taxa_comparecimento,
+                        label: d.nome_municipio // Dado extra para o tooltip
+                    })),
+                    backgroundColor: 'rgba(255, 99, 132, 0.6)'
                 }]
             },
             options: {
                 responsive: true,
+                scales: {
+                    x: {
+                        type: 'logarithmic', // Escala logarítmica é melhor para dados de gasto muito variados
+                        title: { display: true, text: 'Gasto Total de Campanha (R$)' }
+                    },
+                    y: {
+                        title: { display: true, text: 'Taxa de Comparecimento (%)' }
+                    }
+                },
                 plugins: {
-                    legend: { position: 'top' },
-                    tooltip: { callbacks: { label: (ctx) => `${ctx.label}: ${formatCurrency(ctx.raw)}` } }
+                    tooltip: {
+                        callbacks: {
+                            label: (ctx) => {
+                                const dataPoint = ctx.raw;
+                                return [
+                                    `${dataPoint.label}`,
+                                    `Gasto: ${formatCurrency(dataPoint.x)}`,
+                                    `Comparecimento: ${formatPercent(dataPoint.y)}`
+                                ];
+                            }
+                        }
+                    }
                 }
             }
         });
@@ -76,9 +83,7 @@
 
     function renderChoroplethMap(mapaData, geojsonData) {
         const map = L.map('map').setView([-29.5, -53.0], 7);
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-            attribution: '&copy; <a href="https://carto.com/attributions">CARTO</a>'
-        }).addTo(map);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { attribution: '&copy; <a href="https://carto.com/attributions">CARTO</a>' }).addTo(map);
 
         const gastosPorMunicipio = mapaData.reduce((obj, item) => {
             obj[item.id_municipio] = item.valor_despesa;
@@ -86,40 +91,21 @@
         }, {});
         
         const maxGasto = Math.max(...Object.values(gastosPorMunicipio));
-
-        const getColor = (value) => {
-            const scale = value / maxGasto;
-            if (scale > 0.8) return '#800026';
-            if (scale > 0.6) return '#BD0026';
-            if (scale > 0.4) return '#E31A1C';
-            if (scale > 0.2) return '#FC4E2A';
-            if (scale > 0.1) return '#FD8D3C';
-            if (scale > 0.05) return '#FEB24C';
-            if (scale > 0) return '#FFEDA0';
-            return '#FFFFFF';
+        const getColor = (v) => {
+            const s=v/maxGasto; return s > 0.8 ? '#800026' : s > 0.6 ? '#BD0026' : s > 0.4 ? '#E31A1C' : s > 0.2 ? '#FC4E2A' : s > 0.1 ? '#FD8D3C' : s > 0.05 ? '#FEB24C' : s > 0 ? '#FFEDA0' : '#FFFFFF';
         };
 
         L.geoJson(geojsonData, {
-            style: (feature) => ({
-                fillColor: getColor(gastosPorMunicipio[feature.properties.id] || 0),
-                weight: 1,
-                opacity: 1,
-                color: 'white',
-                fillOpacity: 0.8
-            }),
-            onEachFeature: (feature, layer) => {
-                const nome = feature.properties.name;
-                const gasto = gastosPorMunicipio[feature.properties.id] || 0;
-                layer.bindPopup(`<b>${nome}</b><br>Gasto Total: ${formatCurrency(gasto)}`);
-            }
+            style: (f) => ({ fillColor: getColor(gastosPorMunicipio[f.properties.id] || 0), weight: 1, opacity: 1, color: 'white', fillOpacity: 0.8 }),
+            onEachFeature: (f, l) => { l.bindPopup(`<b>${f.properties.name}</b><br>Gasto Total: ${formatCurrency(gastosPorMunicipio[f.properties.id] || 0)}`); }
         }).addTo(map);
     }
     
-    function setupTable(cidadesData) {
+    function setupTable(todasCidadesData) {
         const tableBody = document.getElementById('dataTableBody');
         const searchInput = document.getElementById('searchInput');
         
-        const allRows = cidadesData
+        const allRows = todasCidadesData
             .sort((a, b) => b.valor_despesa - a.valor_despesa)
             .map(cidade => {
                 const row = document.createElement('tr');
@@ -132,8 +118,7 @@
         searchInput.addEventListener('keyup', () => {
             const searchTerm = searchInput.value.toLowerCase();
             allRows.forEach(row => {
-                const cityName = row.cells[0].textContent.toLowerCase();
-                row.style.display = cityName.includes(searchTerm) ? '' : 'none';
+                row.style.display = row.cells[0].textContent.toLowerCase().includes(searchTerm) ? '' : 'none';
             });
         });
     }
@@ -142,34 +127,41 @@
     
     async function initializeDashboard() {
         try {
-            showLoader();
+            document.getElementById('loader-overlay').style.display = 'flex';
 
-            const [cidadesData, partidosData, mapaData, geojsonData] = await Promise.all([
+            // ATENÇÃO: Os endpoints foram reorganizados!
+            const [
+                cidadesRankingData, // Top 15 para o gráfico
+                todasCidadesData,    // Lista completa para a tabela e KPIs
+                partidosData,        // Para o KPI do partido campeão
+                mapaData,
+                correlacaoData,      // Novos dados para o scatter plot
+                geojsonData
+            ] = await Promise.all([
                 fetchData('/api/ranking-cidades'),
+                fetchData('/api/todas-cidades'),
                 fetchData('/api/ranking-partidos'),
                 fetchData('/api/mapa-calor'),
+                fetchData('/api/correlacao-gasto-votacao'),
                 fetch('https://raw.githubusercontent.com/tbrugz/geodata-br/master/geojson/geojs-43-mun.json').then(res => res.json())
             ]);
 
-            renderKPIs(cidadesData, partidosData);
-            renderCidadesChart(cidadesData);
-            renderPartidosChart(partidosData);
+            renderKPIs(todasCidadesData, partidosData);
+            renderCidadesChart(cidadesRankingData);
+            renderCorrelacaoChart(correlacaoData); // Nova função chamada
             renderChoroplethMap(mapaData, geojsonData);
-            setupTable(cidadesData); // Configura a tabela com todos os dados de cidades
+            setupTable(todasCidadesData); // Agora usa a lista completa!
             
-            // Atraso para a animação de fade-out do loader ser visível
             setTimeout(() => {
                 hideLoader();
-                dashboard.style.display = 'block';
             }, 500);
 
         } catch (error) {
             console.error("Erro fatal ao inicializar o dashboard:", error);
-            document.body.innerHTML = `<div class="error-message"><h1>Oops!</h1><p>Não foi possível carregar os dados do dashboard. Verifique o console para mais detalhes técnicos.</p></div>`;
+            document.body.innerHTML = `<div style="text-align: center; padding: 50px; color: red;"><h1>Oops!</h1><p>Não foi possível carregar os dados do dashboard. Verifique o console para mais detalhes.</p></div>`;
         }
     }
 
     // Inicia a aplicação
     initializeDashboard();
-
 })();
