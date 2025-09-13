@@ -9,7 +9,12 @@
     // --- FUNÇÕES UTILITÁRIAS ---
     const formatCurrency = (value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
     const showLoader = () => loader.style.display = 'flex';
-    const hideLoader = () => loader.style.opacity = '0';
+    const hideLoader = () => {
+        loader.style.opacity = '0';
+        setTimeout(() => {
+            loader.style.display = 'none';
+        }, 300); 
+    };
 
     async function fetchData(endpoint) {
         const response = await fetch(endpoint);
